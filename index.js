@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const client = new Client({
   intents: [
@@ -8,18 +8,44 @@ const client = new Client({
   ],
 });
 
-client.once("ready", () => {
+// 1. स्लैश कमांड्स रजिस्टर करना
+const commands = [
+  new SlashCommandBuilder()
+    .setName("ping")
+    .setDescription("Replies with Pong!"),
+  new SlashCommandBuilder()
+    .setName("hi")
+    .setDescription("Say hello to Mimiyah!"),
+].map(command => command.toJSON());
+
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+
+client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
-});
 
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-
-  if (message.content.toLowerCase() === "hi") {
-    return message.reply("Hello! 👋");
+  try {
+    console.log("Registering Slash Commands...");
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log("Slash Commands Registered Successfully!");
+  } catch (error) {
+    console.error(error);
   }
-
-  message.reply("I'm Mimiyah 🤖");
 });
 
-client.login(process.env.TOKEN);
+// 2. स्लैश कमांड्स का रिप्लाई देना
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName } = interaction;
+
+  if (commandName === "ping") {
+    await interaction.reply("Pong! 🏓");
+  } else if (commandName === "hi") {
+    await interaction.reply("Hello! I am Mimiyah 🤖");
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
