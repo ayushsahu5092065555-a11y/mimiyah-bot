@@ -11,10 +11,8 @@ const client = new Client({
   ],
 });
 
-// DisTube सेटिंग (24/7 मोड ऑन)
+// DisTube सेटिंग्स (नए v5 वर्ज़न के अनुसार)
 const distube = new DisTube(client, {
-  leaveOnEmpty: false,
-  leaveOnStop: false,
   emitNewSongOnly: true,
 });
 
