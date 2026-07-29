@@ -11,7 +11,7 @@ const client = new Client({
   ],
 });
 
-// DisTube सेटिंग्स (नए v5 वर्ज़न के अनुसार)
+// DisTube सेटिंग्स (v5 संगत)
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
 });
