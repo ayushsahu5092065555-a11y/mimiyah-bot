@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const { DisTube } = require("distube");
+const { YtDlpPlugin } = require("@distube/yt-dlp");
 const { joinVoiceChannel } = require("@discordjs/voice");
 
 const client = new Client({
@@ -11,16 +12,17 @@ const client = new Client({
   ],
 });
 
-// DisTube सेटिंग्स (v5 संगत)
+// DisTube सेटिंग्स (yt-dlp प्लगइन के साथ)
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
+  plugins: [new YtDlpPlugin()],
 });
 
 // स्लैश कमांड्स
 const commands = [
   new SlashCommandBuilder()
     .setName("play")
-    .setDescription("गाना बजाने के लिए (YouTube नाम या लिंक)")
+    .setDescription("गाना बजाने के लिए (YouTube/Spotify लिंक या नाम)")
     .addStringOption((option) =>
       option.setName("song").setDescription("गाने का नाम या लिंक").setRequired(true)
     ),
@@ -70,7 +72,7 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.editReply(`🎶 **${song}** प्ले किया जा रहा है!`);
     } catch (err) {
       console.error(err);
-      await interaction.editReply("❌ गाना बजाने में दिक्कत आई!");
+      await interaction.editReply("❌ गाना बजाने में दिक्कत आई! (कृपया गाने का पूरा लिंक या सही नाम दें)");
     }
   } else if (commandName === "skip") {
     try {
