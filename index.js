@@ -1,34 +1,31 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, AuditLogEvent } = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildModeration, // Anti-Nuke audit logs के लिए
     GatewayIntentBits.MessageContent,
   ],
 });
 
-// आपकी Discord User ID
+// 👑 आपकी Discord User ID (Owner)
 const OWNER_ID = "1434364209214390423";
 
 // स्लैश कमांड्स
 const commands = [
   new SlashCommandBuilder().setName("ping").setDescription("बॉट का रिस्पॉन्स टाइम चेक करें"),
   new SlashCommandBuilder().setName("hi").setDescription("Cutie को हैलो बोलें!"),
-  new SlashCommandBuilder().setName("avatar").setDescription("अपनी या किसी यूजर की प्रोफाइल फोटो देखें")
+  new SlashCommandBuilder().setName("avatar").setDescription("प्रोफाइल फोटो देखें")
     .addUserOption((option) => option.setName("user").setDescription("किसकी डीपी देखनी है?").setRequired(false)),
   new SlashCommandBuilder().setName("say").setDescription("बॉट से कोई मैसेज बुलवाएं")
     .addStringOption((option) => option.setName("message").setDescription("क्या बुलवाना है?").setRequired(true)),
-  
-  // 🎮 नए गेम्स के कमांड्स
   new SlashCommandBuilder().setName("guess").setDescription("1 से 10 के बीच का नंबर गेस करें!")
     .addIntegerOption((option) => option.setName("number").setDescription("अपना नंबर चुनें (1-10)").setRequired(true)),
   new SlashCommandBuilder().setName("rps").setDescription("Rock, Paper, Scissors खेलें!")
     .addStringOption((option) =>
-      option.setName("choice")
-        .setDescription("अपना विकल्प चुनें")
-        .setRequired(true)
+      option.setName("choice").setDescription("अपना विकल्प चुनें").setRequired(true)
         .addChoices(
           { name: "🪨 Rock", value: "rock" },
           { name: "📄 Paper", value: "paper" },
@@ -37,13 +34,8 @@ const commands = [
     ),
   new SlashCommandBuilder().setName("truth-or-dare").setDescription("Truth या Dare चुनें!")
     .addStringOption((option) =>
-      option.setName("type")
-        .setDescription("Truth या Dare?")
-        .setRequired(true)
-        .addChoices(
-          { name: "Truth", value: "truth" },
-          { name: "Dare", value: "dare" }
-        )
+      option.setName("type").setDescription("Truth या Dare?").setRequired(true)
+        .addChoices({ name: "Truth", value: "truth" }, { name: "Dare", value: "dare" })
     ),
 ].map((cmd) => cmd.toJSON());
 
@@ -54,13 +46,46 @@ client.once("ready", async () => {
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log("All New Game Commands Registered!");
+    console.log("All Commands Registered!");
   } catch (error) {
     console.error(error);
   }
 });
 
-// 👑 ऑटोमैटिक ओनर एंट्री डिटेक्ट करने का इवेंट (Voice State Update)
+// 🛡️ ANTI-NUKE SYSTEM: Channel Delete Protection
+client.on("channelDelete", async (channel) => {
+  try {
+    const fetchedLogs = await channel.guild.fetchAuditLogs({
+      limit: 1,
+      type: AuditLogEvent.ChannelDelete,
+    });
+    const deletionLog = fetchedLogs.entries.first();
+
+    if (!deletionLog) return;
+    const { executor } = deletionLog;
+
+    // अगर डिलीट करने वाला बंदा Server Owner नहीं है
+    if (executor.id !== OWNER_ID && executor.id !== client.user.id) {
+      const systemChannel = channel.guild.systemChannel || channel.guild.channels.cache.find(
+        (c) => c.isTextBased() && c.permissionsFor(channel.guild.members.me).has("SendMessages")
+      );
+
+      if (systemChannel) {
+        const warningEmbed = new EmbedBuilder()
+          .setTitle("⚠️ Anti-Nuke Alert!")
+          .setDescription(`🚨 **Warning:** User **${executor.tag}** (ID: ${executor.id}) deleted channel **#${channel.name}**!\nयह हरकत सिक्योरिटी लॉगेस में रिकॉर्ड हो गई है।`)
+          .setColor("#FF0000")
+          .setTimestamp();
+
+        systemChannel.send({ embeds: [warningEmbed] });
+      }
+    }
+  } catch (err) {
+    console.error("Anti-Nuke Error:", err);
+  }
+});
+
+// 👑 Owner VC Arrival Detector
 client.on("voiceStateUpdate", async (oldState, newState) => {
   if (!oldState.channelId && newState.channelId) {
     if (newState.member.id === OWNER_ID) {
@@ -81,7 +106,7 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
   }
 });
 
-// कमांड्स हैंडलर
+// 🎮 Interactive Interaction Handler
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -102,22 +127,16 @@ client.on("interactionCreate", async (interaction) => {
   } else if (commandName === "say") {
     const text = options.getString("message");
     await interaction.reply({ content: text });
-  } 
-  
-  // 🎯 Guess Number Game
-  else if (commandName === "guess") {
+  } else if (commandName === "guess") {
     const userGuess = options.getInteger("number");
     const botNumber = Math.floor(Math.random() * 10) + 1;
 
     if (userGuess === botNumber) {
       await interaction.reply(`🎉 **जीत गए!** तुमने **${userGuess}** चुना था और मेरा नंबर भी **${botNumber}** ही था! 😎`);
     } else {
-      await interaction.reply(`❌ **गलत जवाब!** तुमने **${userGuess}** चुना था, लेकिन मेरा नंबर **${botNumber}** था। दोबारा ट्राई करो! 😜`);
+      await interaction.reply(`❌ **गलत जवाब!** तुमने **${userGuess}** चुना था, लेकिन मेरा नंबर **${botNumber}** था। 😜`);
     }
-  } 
-  
-  // ✂️ Rock Paper Scissors Game
-  else if (commandName === "rps") {
+  } else if (commandName === "rps") {
     const userChoice = options.getString("choice");
     const choices = ["rock", "paper", "scissors"];
     const botChoice = choices[Math.floor(Math.random() * choices.length)];
@@ -136,18 +155,13 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     await interaction.reply(result);
-  } 
-  
-  // 🎲 Truth or Dare Game
-  else if (commandName === "truth-or-dare") {
+  } else if (commandName === "truth-or-dare") {
     const type = options.getString("type");
-
     const truths = [
       "तुम्हारा सबसे एम्बैरेसिंग मोमेंट क्या रहा है?",
       "अगर तुम्हें 1 लाख रुपये मिलें, तो सबसे पहले क्या खरीदोगे?",
       "इस सर्वर में तुम्हारा सबसे फेवरेट बंदा कौन है?",
     ];
-
     const dares = [
       "किसी भी वॉइस चैनल में जाकर 10 सेकंड तक गाना गाओ!",
       "अपने प्रोफाइल स्टेटस में अगले 1 घंटे के लिए 'I Love Cutie Bot' लिखो!",
@@ -155,11 +169,9 @@ client.on("interactionCreate", async (interaction) => {
     ];
 
     if (type === "truth") {
-      const randomTruth = truths[Math.floor(Math.random() * truths.length)];
-      await interaction.reply(`🤔 **Truth:** ${randomTruth}`);
+      await interaction.reply(`🤔 **Truth:** ${truths[Math.floor(Math.random() * truths.length)]}`);
     } else {
-      const randomDare = dares[Math.floor(Math.random() * dares.length)];
-      await interaction.reply(`🔥 **Dare:** ${randomDare}`);
+      await interaction.reply(`🔥 **Dare:** ${dares[Math.floor(Math.random() * dares.length)]}`);
     }
   }
 });
