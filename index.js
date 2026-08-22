@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
-const play = require('play-dl');
+const { DisTube } = require('distube');
+const { YouTubePlugin } = require('@distube/yt-dlp');
 
 const client = new Client({
   intents: [
@@ -11,111 +11,88 @@ const client = new Client({
   ]
 });
 
-const player = createAudioPlayer();
-let connection = null;
+// Stable Music Engine
+const distube = new DisTube(client, {
+  emitNewSongOnly: true,
+  plugins: [new YouTubePlugin()]
+});
 
-// Slash Commands
 const commands = [
   new SlashCommandBuilder()
     .setName('play')
-    .setDescription('VC me aakar gaana bajaye')
+    .setDescription('VC me gaana bajaye')
     .addStringOption(option => 
       option.setName('song')
         .setDescription('Gaane ka naam ya YouTube link')
         .setRequired(true)),
-  new SlashCommandBuilder().setName('pause').setDescription('Gaana roke'),
-  new SlashCommandBuilder().setName('resume').setDescription('Gaana firse chalaye'),
+  new SlashCommandBuilder().setName('pause').setDescription('Gaana pause kare'),
+  new SlashCommandBuilder().setName('resume').setDescription('Gaana resume kare'),
   new SlashCommandBuilder().setName('stop').setDescription('Music band karke VC chhod de'),
-  new SlashCommandBuilder().setName('help').setDescription('Music commands dekhe')
+  new SlashCommandBuilder().setName('help').setDescription('Commands dekhe')
 ].map(command => command.toJSON());
 
-// Slash Commands Register
 client.once('ready', async () => {
-  console.log(`Bot Online: ${client.user.tag}`);
+  console.log(`Bot Ready: ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(
       Routes.applicationCommands(client.user.id),
       { body: commands },
     );
-    console.log('Slash Commands Registered!');
-  } catch (error) {
-    console.error(error);
+    console.log('Music Slash Commands Synced!');
+  } catch (err) {
+    console.error(err);
   }
 });
 
-// Interactions
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName } = interaction;
+  const voiceChannel = interaction.member.voice.channel;
 
   if (commandName === 'help') {
     const helpEmbed = new EmbedBuilder()
       .setColor('#FFB6C1')
-      .setTitle('🌸 cutie† | Music Commands')
-      .setDescription('• `/play <song>` - VC me aakar gaana bajaye\n• `/pause` - Gaana roke\n• `/resume` - Gaana wapas chalaye\n• `/stop` - VC chhod kar band ho jaye');
+      .setTitle('🌸 cutie† | Music Bot')
+      .setDescription('• `/play <song>` - VC me gaana chalaye\n• `/pause` - Gaana roke\n• `/resume` - Gaana resume kare\n• `/stop` - VC chhod de');
     return await interaction.reply({ embeds: [helpEmbed] });
   }
 
   if (commandName === 'play') {
-    const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
       return await interaction.reply({ content: '❌ Pehle kisi Voice Channel (VC) me join ho jao!', ephemeral: true });
     }
 
     await interaction.deferReply();
-    const query = interaction.options.getString('song');
+    const song = interaction.options.getString('song');
 
     try {
-      // 1. Bot VC Join Karega
-      connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: interaction.guild.id,
-        adapterCreator: interaction.guild.voiceAdapterCreator,
+      await distube.play(voiceChannel, song, {
+        textChannel: interaction.channel,
+        member: interaction.member
       });
-
-      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-
-      // 2. Song Search aur Stream
-      const searchResults = await play.search(query, { limit: 1 });
-      if (!searchResults || searchResults.length === 0) {
-        return await interaction.editReply('❌ Koi gaana nahi mila!');
-      }
-
-      const songInfo = searchResults[0];
-      const stream = await play.stream(songInfo.url);
-
-      const resource = createAudioResource(stream.stream, {
-        inputType: stream.type
-      });
-
-      player.play(resource);
-      connection.subscribe(player);
-
-      await interaction.editReply(`🎶 **Playing:** \`${songInfo.title}\` in **${voiceChannel.name}** 🎧`);
-    } catch (err) {
-      console.error(err);
-      await interaction.editReply('❌ VC join karne ya gaana chalane me problem aayi! Check permissions.');
+      await interaction.editReply(`🎶 **Requested:** \`${song}\` in **${voiceChannel.name}** 🎧`);
+    } catch (e) {
+      console.error(e);
+      await interaction.editReply('❌ Song play karne me problem aayi! Please try again.');
     }
   }
 
   else if (commandName === 'pause') {
-    player.pause();
+    distube.pause(interaction.guild);
     await interaction.reply('⏸️ Gaana pause ho gaya!');
   }
 
   else if (commandName === 'resume') {
-    player.unpause();
-    await interaction.reply('▶️ Gaana firse start ho gaya!');
+    distube.resume(interaction.guild);
+    await interaction.reply('▶️ Gaana firse shuru ho gaya!');
   }
 
   else if (commandName === 'stop') {
-    player.stop();
-    if (connection) connection.destroy();
-    await interaction.reply('⏹️ Music band ho gaya aur bot VC se nikal gaya.');
+    distube.voices.leave(interaction.guild);
+    await interaction.reply('⏹️ Bot VC se nikal gaya!');
   }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-  
