@@ -8,8 +8,9 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "@discordjs/voice": "^0.16.1",
-    "play-dl": "^1.9.7",
+    "distube": "^5.0.0-beta.23",
+    "@distube/yt-dlp": "^2.0.1",
     "ffmpeg-static": "^5.2.0",
-    "sodium-native": "^4.2.0"
+    "libsodium-wrappers": "^0.7.13"
   }
 }
