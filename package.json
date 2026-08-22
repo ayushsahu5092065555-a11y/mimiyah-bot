@@ -1,12 +1,14 @@
 {
-  "name": "mimiyah-bot",
+  "name": "cutie-music-bot",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.18.0"
+    "discord.js": "^14.14.1",
+    "@discordjs/voice": "^0.16.1",
+    "play-dl": "^1.9.7",
+    "sodium-native": "^4.2.0"
   }
 }
-
