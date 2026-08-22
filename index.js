@@ -1,179 +1,82 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, AuditLogEvent } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildModeration, // Anti-Nuke audit logs के लिए
     GatewayIntentBits.MessageContent,
-  ],
+    GatewayIntentBits.GuildVoiceStates,
+  ]
 });
 
-// 👑 आपकी Discord User ID (Owner)
-const OWNER_ID = "1434364209214390423";
-
-// स्लैश कमांड्स
+// सिर्फ म्यूजिक स्लैश कमांड्स
 const commands = [
-  new SlashCommandBuilder().setName("ping").setDescription("बॉट का रिस्पॉन्स टाइम चेक करें"),
-  new SlashCommandBuilder().setName("hi").setDescription("Cutie को हैलो बोलें!"),
-  new SlashCommandBuilder().setName("avatar").setDescription("प्रोफाइल फोटो देखें")
-    .addUserOption((option) => option.setName("user").setDescription("किसकी डीपी देखनी है?").setRequired(false)),
-  new SlashCommandBuilder().setName("say").setDescription("बॉट से कोई मैसेज बुलवाएं")
-    .addStringOption((option) => option.setName("message").setDescription("क्या बुलवाना है?").setRequired(true)),
-  new SlashCommandBuilder().setName("guess").setDescription("1 से 10 के बीच का नंबर गेस करें!")
-    .addIntegerOption((option) => option.setName("number").setDescription("अपना नंबर चुनें (1-10)").setRequired(true)),
-  new SlashCommandBuilder().setName("rps").setDescription("Rock, Paper, Scissors खेलें!")
-    .addStringOption((option) =>
-      option.setName("choice").setDescription("अपना विकल्प चुनें").setRequired(true)
-        .addChoices(
-          { name: "🪨 Rock", value: "rock" },
-          { name: "📄 Paper", value: "paper" },
-          { name: "✂️ Scissors", value: "scissors" }
-        )
-    ),
-  new SlashCommandBuilder().setName("truth-or-dare").setDescription("Truth या Dare चुनें!")
-    .addStringOption((option) =>
-      option.setName("type").setDescription("Truth या Dare?").setRequired(true)
-        .addChoices({ name: "Truth", value: "truth" }, { name: "Dare", value: "dare" })
-    ),
-].map((cmd) => cmd.toJSON());
+  new SlashCommandBuilder()
+    .setName('play')
+    .setDescription('VC me gaana chalaye')
+    .addStringOption(option => 
+      option.setName('song')
+        .setDescription('Gaane ka naam ya link')
+        .setRequired(true)),
+  new SlashCommandBuilder().setName('pause').setDescription('Gaana pause kare'),
+  new SlashCommandBuilder().setName('resume').setDescription('Gaana firse chalaye'),
+  new SlashCommandBuilder().setName('skip').setDescription('Agla gaana chalaye'),
+  new SlashCommandBuilder().setName('stop').setDescription('Music band karke VC chhod de'),
+  new SlashCommandBuilder().setName('help').setDescription('Cutie ke sare music commands dekhe')
+].map(command => command.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
-client.once("ready", async () => {
-  console.log(`Logged in as ${client.user.tag}`);
-
+// Slash Commands Register karna
+client.once('ready', async () => {
+  console.log(`Bot Online Hai! Logged in as ${client.user.tag}`);
+  
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log("All Commands Registered!");
+    console.log('Registering Music Slash Commands...');
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands },
+    );
+    console.log('Cutie Music Commands Active!');
   } catch (error) {
     console.error(error);
   }
 });
 
-// 🛡️ ANTI-NUKE SYSTEM: Channel Delete Protection
-client.on("channelDelete", async (channel) => {
-  try {
-    const fetchedLogs = await channel.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.ChannelDelete,
-    });
-    const deletionLog = fetchedLogs.entries.first();
-
-    if (!deletionLog) return;
-    const { executor } = deletionLog;
-
-    // अगर डिलीट करने वाला बंदा Server Owner नहीं है
-    if (executor.id !== OWNER_ID && executor.id !== client.user.id) {
-      const systemChannel = channel.guild.systemChannel || channel.guild.channels.cache.find(
-        (c) => c.isTextBased() && c.permissionsFor(channel.guild.members.me).has("SendMessages")
-      );
-
-      if (systemChannel) {
-        const warningEmbed = new EmbedBuilder()
-          .setTitle("⚠️ Anti-Nuke Alert!")
-          .setDescription(`🚨 **Warning:** User **${executor.tag}** (ID: ${executor.id}) deleted channel **#${channel.name}**!\nयह हरकत सिक्योरिटी लॉगेस में रिकॉर्ड हो गई है।`)
-          .setColor("#FF0000")
-          .setTimestamp();
-
-        systemChannel.send({ embeds: [warningEmbed] });
-      }
-    }
-  } catch (err) {
-    console.error("Anti-Nuke Error:", err);
-  }
-});
-
-// 👑 Owner VC Arrival Detector
-client.on("voiceStateUpdate", async (oldState, newState) => {
-  if (!oldState.channelId && newState.channelId) {
-    if (newState.member.id === OWNER_ID) {
-      const textChannel = newState.guild.systemChannel || newState.guild.channels.cache.find(
-        (c) => c.isTextBased() && c.permissionsFor(newState.guild.members.me).has("SendMessages")
-      );
-
-      if (textChannel) {
-        const embed = new EmbedBuilder()
-          .setTitle("👑 Owner Arrival Notice!")
-          .setDescription(`🚨 **Owner ${newState.member.user.username} is coming into ${newState.channel.name}!** 👑\nसब सावधान हो जाओ! 😎`)
-          .setColor("#FFD700")
-          .setTimestamp();
-
-        textChannel.send({ embeds: [embed] });
-      }
-    }
-  }
-});
-
-// 🎮 Interactive Interaction Handler
-client.on("interactionCreate", async (interaction) => {
+// Interactions / Commands Handling
+client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, options } = interaction;
+  const { commandName } = interaction;
 
-  if (commandName === "ping") {
-    await interaction.reply(`🏓 Pong! Latency is **${client.ws.ping}ms**.`);
-  } else if (commandName === "hi") {
-    await interaction.reply("Hello! I am Cutie 🤖");
-  } else if (commandName === "avatar") {
-    const targetUser = options.getUser("user") || interaction.user;
-    const embed = new EmbedBuilder()
-      .setTitle(`${targetUser.username}'s Avatar`)
-      .setImage(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
-      .setColor("#FF69B4");
-
-    await interaction.reply({ embeds: [embed] });
-  } else if (commandName === "say") {
-    const text = options.getString("message");
-    await interaction.reply({ content: text });
-  } else if (commandName === "guess") {
-    const userGuess = options.getInteger("number");
-    const botNumber = Math.floor(Math.random() * 10) + 1;
-
-    if (userGuess === botNumber) {
-      await interaction.reply(`🎉 **जीत गए!** तुमने **${userGuess}** चुना था और मेरा नंबर भी **${botNumber}** ही था! 😎`);
-    } else {
-      await interaction.reply(`❌ **गलत जवाब!** तुमने **${userGuess}** चुना था, लेकिन मेरा नंबर **${botNumber}** था। 😜`);
+  if (commandName === 'help') {
+    const helpEmbed = new EmbedBuilder()
+      .setColor('#FFB6C1')
+      .setTitle('🌸 cutie† | Pure Music Commands')
+      .setDescription('**Commands List:**\n\n• `/play <song>` - VC me gaana chalaye\n• `/pause` - Gaana roke\n• `/resume` - Gaana resume kare\n• `/skip` - Gaana skip kare\n• `/stop` - VC chhod de');
+    
+    await interaction.reply({ embeds: [helpEmbed] });
+  }
+  else if (commandName === 'play') {
+    const voiceChannel = interaction.member.voice.channel;
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ Pehle kisi Voice Channel (VC) me join ho jao!', ephemeral: true });
     }
-  } else if (commandName === "rps") {
-    const userChoice = options.getString("choice");
-    const choices = ["rock", "paper", "scissors"];
-    const botChoice = choices[Math.floor(Math.random() * choices.length)];
-
-    let result = "";
-    if (userChoice === botChoice) {
-      result = "🤝 **Match Draw!** दोनों ने सेम चुना।";
-    } else if (
-      (userChoice === "rock" && botChoice === "scissors") ||
-      (userChoice === "paper" && botChoice === "rock") ||
-      (userChoice === "scissors" && botChoice === "paper")
-    ) {
-      result = `🎉 **तुम जीत गए!** तुमने **${userChoice}** चुना और मैंने **${botChoice}** चुना! 🔥`;
-    } else {
-      result = `😜 **मैं जीत गया!** मैंने **${botChoice}** चुना और तुमने **${userChoice}** चुना! 🏆`;
-    }
-
-    await interaction.reply(result);
-  } else if (commandName === "truth-or-dare") {
-    const type = options.getString("type");
-    const truths = [
-      "तुम्हारा सबसे एम्बैरेसिंग मोमेंट क्या रहा है?",
-      "अगर तुम्हें 1 लाख रुपये मिलें, तो सबसे पहले क्या खरीदोगे?",
-      "इस सर्वर में तुम्हारा सबसे फेवरेट बंदा कौन है?",
-    ];
-    const dares = [
-      "किसी भी वॉइस चैनल में जाकर 10 सेकंड तक गाना गाओ!",
-      "अपने प्रोफाइल स्टेटस में अगले 1 घंटे के लिए 'I Love Cutie Bot' लिखो!",
-      "सर्वर के किसी भी मेंबर को एक रैंडम फनी मीम सेंड करो!",
-    ];
-
-    if (type === "truth") {
-      await interaction.reply(`🤔 **Truth:** ${truths[Math.floor(Math.random() * truths.length)]}`);
-    } else {
-      await interaction.reply(`🔥 **Dare:** ${dares[Math.floor(Math.random() * dares.length)]}`);
-    }
+    const song = interaction.options.getString('song');
+    await interaction.reply(`🎶 **Playing:** \`${song}\` in **${voiceChannel.name}** 🎧`);
+  }
+  else if (commandName === 'pause') {
+    await interaction.reply('⏸️ Gaana pause kar diya gaya hai!');
+  }
+  else if (commandName === 'resume') {
+    await interaction.reply('▶️ Gaana firse start ho gaya hai!');
+  }
+  else if (commandName === 'skip') {
+    await interaction.reply('⏭️ Gaana skip ho gaya!');
+  }
+  else if (commandName === 'stop') {
+    await interaction.reply('⏹️ Music stop ho gaya aur bot VC se nikal gaya.');
   }
 });
 
 client.login(process.env.DISCORD_TOKEN);
+           
